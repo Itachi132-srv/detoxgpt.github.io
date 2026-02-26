@@ -3,165 +3,157 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Pro Cart Racing</title>
+<title>3D Cart Racing Mobile</title>
 <style>
-body {
-    margin: 0;
-    overflow: hidden;
-    background: #111;
-    font-family: Arial, sans-serif;
-}
-
-canvas {
-    display: block;
-}
-
-.ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    font-size: 18px;
-    font-weight: bold;
-}
-
+body { margin: 0; overflow: hidden; background: #111; }
+canvas { display: block; }
 .controls {
-    position: absolute;
-    bottom: 20px;
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 30px;
+    position: absolute; bottom: 20px; width: 100%; display: flex; justify-content: space-between; padding: 0 20px;
 }
-
 .btn {
-    width: 80px;
-    height: 80px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 30px;
-    color: white;
-    user-select: none;
+    width: 80px; height: 80px; background: rgba(255,255,255,0.2); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 30px; color: white; user-select: none;
+}
+.ui {
+    position: absolute; top: 10px; left: 10px; color: white; font-size: 18px; font-weight: bold;
 }
 </style>
 </head>
 <body>
-
-<div class="ui">Speed: <span id="speed">0</span></div>
-<canvas id="game"></canvas>
-
+<div class="ui">Speed: <span id="speed">0</span> | Coins: <span id="coins">0</span></div>
 <div class="controls">
     <div class="btn" id="left">⬅</div>
+    <div class="btn" id="boost">⚡</div>
     <div class="btn" id="right">➡</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// Road
+let roadGeometry = new THREE.PlaneGeometry(4, 200);
+let roadMaterial = new THREE.MeshStandardMaterial({color: 0x333333});
+let road = new THREE.Mesh(roadGeometry, roadMaterial);
+road.rotation.x = -Math.PI/2;
+scene.add(road);
 
-let roadWidth = canvas.width * 0.6;
-let roadX = (canvas.width - roadWidth) / 2;
+// Cart
+let cartGeometry = new THREE.BoxGeometry(1,0.5,2);
+let cartMaterial = new THREE.MeshStandardMaterial({color: 0xff0000});
+let cart = new THREE.Mesh(cartGeometry, cartMaterial);
+cart.position.y = 0.25;
+cart.position.z = -8;
+scene.add(cart);
 
-let cart = {
-    x: canvas.width / 2 - 25,
-    y: canvas.height - 120,
-    width: 50,
-    height: 90,
-    speed: 0,
-    maxSpeed: 12
-};
+// Lights
+let ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+let directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+directionalLight.position.set(5,10,5);
+scene.add(directionalLight);
 
+// Obstacles
 let obstacles = [];
-let score = 0;
-
 function spawnObstacle() {
-    let x = roadX + Math.random() * (roadWidth - 40);
-    obstacles.push({
-        x: x,
-        y: -100,
-        width: 40,
-        height: 70
-    });
+    let obsGeometry = new THREE.BoxGeometry(1,1,1);
+    let obsMaterial = new THREE.MeshStandardMaterial({color:0xffff00});
+    let obs = new THREE.Mesh(obsGeometry, obsMaterial);
+    obs.position.z = -50;
+    obs.position.x = (Math.random()-0.5)*3;
+    scene.add(obs);
+    obstacles.push(obs);
 }
 
-function drawRoad() {
-    ctx.fillStyle = "#444";
-    ctx.fillRect(roadX, 0, roadWidth, canvas.height);
-
-    ctx.strokeStyle = "white";
-    ctx.setLineDash([20, 20]);
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(canvas.width/2, 0);
-    ctx.lineTo(canvas.width/2, canvas.height);
-    ctx.stroke();
-    ctx.setLineDash([]);
+// Coins
+let coins = [];
+function spawnCoin() {
+    let coinGeo = new THREE.CylinderGeometry(0.3,0.3,0.1,20);
+    let coinMat = new THREE.MeshStandardMaterial({color:0xffd700});
+    let coin = new THREE.Mesh(coinGeo, coinMat);
+    coin.rotation.x = Math.PI/2;
+    coin.position.z = -50;
+    coin.position.x = (Math.random()-0.5)*3;
+    scene.add(coin);
+    coins.push(coin);
 }
 
-function drawCart() {
-    ctx.fillStyle = "red";
-    ctx.fillRect(cart.x, cart.y, cart.width, cart.height);
-}
+let speed = 0;
+let maxSpeed = 0.5;
+let boost = false;
+let collectedCoins = 0;
 
-function drawObstacles() {
-    ctx.fillStyle = "yellow";
-    obstacles.forEach(o => {
-        ctx.fillRect(o.x, o.y, o.width, o.height);
-    });
-}
+// Camera
+camera.position.y = 5;
+camera.position.z = 5;
+camera.lookAt(cart.position);
 
-function update() {
-    cart.speed = Math.min(cart.speed + 0.05, cart.maxSpeed);
-    document.getElementById("speed").innerText = Math.floor(cart.speed * 10);
+// Controls
+let moveLeft = false;
+let moveRight = false;
+document.getElementById("left").addEventListener("touchstart",()=>{moveLeft=true;});
+document.getElementById("left").addEventListener("touchend",()=>{moveLeft=false;});
+document.getElementById("right").addEventListener("touchstart",()=>{moveRight=true;});
+document.getElementById("right").addEventListener("touchend",()=>{moveRight=false;});
+document.getElementById("boost").addEventListener("touchstart",()=>{boost=true;});
+document.getElementById("boost").addEventListener("touchend",()=>{boost=false;});
 
-    obstacles.forEach(o => {
-        o.y += cart.speed;
-    });
+// Game Loop
+function animate(){
+    requestAnimationFrame(animate);
 
-    obstacles = obstacles.filter(o => o.y < canvas.height + 100);
+    speed += (boost?0.02:0.005);
+    speed = Math.min(speed,maxSpeed + (boost?0.5:0));
 
-    obstacles.forEach(o => {
-        if (
-            cart.x < o.x + o.width &&
-            cart.x + cart.width > o.x &&
-            cart.y < o.y + o.height &&
-            cart.y + cart.height > o.y
-        ) {
-            alert("Game Over! Score: " + score);
+    // Move cart
+    if(moveLeft) cart.position.x -= 0.1;
+    if(moveRight) cart.position.x += 0.1;
+    cart.position.x = Math.max(-1.5, Math.min(1.5, cart.position.x));
+
+    // Move obstacles
+    obstacles.forEach((o,i)=>{
+        o.position.z += speed*10;
+        if(o.position.z > 5){
+            scene.remove(o);
+            obstacles.splice(i,1);
+        }
+        // Collision
+        if(Math.abs(o.position.z-cart.position.z)<1 && Math.abs(o.position.x-cart.position.x)<0.8){
+            alert("Game Over! Coins: "+collectedCoins);
             document.location.reload();
         }
     });
 
-    score++;
+    // Move coins
+    coins.forEach((c,i)=>{
+        c.position.z += speed*10;
+        c.rotation.z += 0.1;
+        if(c.position.z>5){
+            scene.remove(c);
+            coins.splice(i,1);
+        }
+        // Collect coin
+        if(Math.abs(c.position.z-cart.position.z)<1 && Math.abs(c.position.x-cart.position.x)<0.8){
+            collectedCoins++;
+            document.getElementById("coins").innerText = collectedCoins;
+            scene.remove(c);
+            coins.splice(i,1);
+        }
+    });
+
+    // Spawn obstacles & coins randomly
+    if(Math.random()<0.02) spawnObstacle();
+    if(Math.random()<0.02) spawnCoin();
+
+    document.getElementById("speed").innerText = Math.floor(speed*100);
+
+    renderer.render(scene,camera);
 }
-
-function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawRoad();
-    drawCart();
-    drawObstacles();
-    update();
-    requestAnimationFrame(gameLoop);
-}
-
-setInterval(spawnObstacle, 1500);
-
-document.getElementById("left").addEventListener("touchstart", () => {
-    cart.x -= 40;
-});
-
-document.getElementById("right").addEventListener("touchstart", () => {
-    cart.x += 40;
-});
-
-gameLoop();
+animate();
 </script>
-
 </body>
 </html>
