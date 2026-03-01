@@ -85,7 +85,6 @@ button:hover{
     background:#ff9500;
 }
 
-/* Mobile responsive */
 @media (max-width:600px){
     .chat-container{
         height:95vh;
