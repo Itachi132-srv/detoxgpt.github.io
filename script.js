@@ -1,10 +1,3 @@
-let API_KEY = "";
-
-function saveKey(){
-  API_KEY = document.getElementById("a93b720ddea64c2d8859e9541a266057").value;
-  alert("API Key Saved!");
-}
-
 function addMessage(text, sender){
   const chatBox = document.getElementById("chatBox");
   const msg = document.createElement("div");
@@ -16,37 +9,36 @@ function addMessage(text, sender){
 
 async function sendMessage(){
   const input = document.getElementById("userInput");
-  const message = input.value;
+  const message = input.value.trim();
   if(!message) return;
 
   addMessage(message, "user");
   input.value = "";
 
-  addMessage("Typing...", "bot");
+  const typingMsg = document.createElement("div");
+  typingMsg.classList.add("message", "bot");
+  typingMsg.innerText = "Typing...";
+  document.getElementById("chatBox").appendChild(typingMsg);
 
-  try{
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  try {
+    const response = await fetch("http://localhost:3000/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + API_KEY
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {role: "system", content: "You are Detox AI, an intelligent assistant."},
-          {role: "user", content: message}
-        ]
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
     });
 
     const data = await response.json();
+    typingMsg.remove();
 
-    document.querySelector(".bot:last-child").remove();
-    addMessage(data.choices[0].message.content, "bot");
+    if(data.choices){
+      addMessage(data.choices[0].message.content, "bot");
+    } else {
+      addMessage("API Error: " + JSON.stringify(data), "bot");
+    }
 
-  }catch(error){
-    document.querySelector(".bot:last-child").remove();
-    addMessage("Error connecting to API.", "bot");
+  } catch (err) {
+    typingMsg.remove();
+    addMessage("Connection error. Check server.", "bot");
+    console.log(err);
   }
 }
